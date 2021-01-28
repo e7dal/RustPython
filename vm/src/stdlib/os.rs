@@ -191,10 +191,9 @@ impl IntoPyException for &'_ io::Error {
                 _ => vm.ctx.exceptions.os_error.clone(),
             },
         };
-        let os_error = vm.new_exception_msg(exc_type, self.to_string());
         let errno = self.raw_os_error().into_pyobject(vm);
-        vm.set_attr(os_error.as_object(), "errno", errno).unwrap();
-        os_error
+        let msg = vm.ctx.new_str(self.to_string());
+        vm.new_exception(exc_type, vec![errno, msg])
     }
 }
 
@@ -213,14 +212,15 @@ impl IntoPyException for nix::Error {
             nix::Error::UnsupportedOperation => vm.new_runtime_error(self.to_string()),
             nix::Error::Sys(errno) => {
                 let exc_type = posix::convert_nix_errno(vm, errno);
-                vm.new_exception_msg(exc_type, self.to_string())
+                vm.new_exception(
+                    exc_type,
+                    vec![
+                        vm.ctx.new_int(errno as i32),
+                        vm.ctx.new_str(self.to_string()),
+                    ],
+                )
             }
         };
-
-        if let nix::Error::Sys(errno) = self {
-            vm.set_attr(nix_error.as_object(), "errno", vm.ctx.new_int(errno as i32))
-                .unwrap();
-        }
 
         nix_error
     }
